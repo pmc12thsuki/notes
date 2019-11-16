@@ -22,7 +22,7 @@ MongoDB
     - `db.<collection>.insertOne({property})`
 ![](https://i.imgur.com/cHpUngL.png)
 
-> JSON 中的 key-value pairt 中，key 可以不加上引號、而 value 如果是 string，則單引號、雙引號都可以
+> JSON 中的 key-value pair 中，key 可以不加上引號、而 value 如果是 string，則單引號、雙引號都可以
 ## MongoDB Ecosystem
 ![](https://i.imgur.com/EXvartR.jpg)
 
@@ -50,22 +50,24 @@ MongoDB
     - MondoDB 儲存的是 BSON
     - 一個是空間較有效率
     - 另一個是 BSON 可以有更多的 type。
-        - 如 ObjectId type 在 JSON 中市不合法的，但在 BSON 中就可以
+        - 如 ObjectId type 在 JSON 中是不合法的，但在 BSON 中就可以
         - 或是其他 Number Types
 
 
 ![](https://i.imgur.com/vIpT1Fb.jpg)
 
-# Basic
-## CRUD & Mongo
+# Basic Operations
+![](https://i.imgur.com/sek6vMr.jpg)
+
+## CRUD
 - 不同工作性質的專案都會透過 CRUD 跟 MongoDB 互動
     - 包含 app
     - 資料分析
     - admin 管理等等
+
+
 ![](https://i.imgur.com/DhemkqY.jpg)
 
-## Basic Operations
-![](https://i.imgur.com/sek6vMr.jpg)
 
 ### Create
 - create document 時 Mongo DB 會主動 assign 一個獨特的 _id 欄位
@@ -75,19 +77,18 @@ MongoDB
     - 只要在 insert 時帶上 `_id` 欄位就行
     - 我們要自己保證 _id 不會重複，如果重複就會 insert 失敗
 
-- insertOne({要被 insert 的資料})
-- insertMany(**array of 要 insert 的資料**)
+- `insertOne({要被 insert 的資料})`
+- `insertMany(array of 要 insert 的資料)`
     - **裡面放 array**
-    - mongo 在 insert 時會依照 array 的順序去 insert
-- 使用 mongo shell 時，insert 的 document 中，key 可以不需要用 `''` 包起來。如 `db.collection.insertOne({name: 'myName'})`
+    - mongo 在 insert 時**會依照 array 的順序去 insert**
+
 ### Read
-- find({找出所有符合條件的 document})
+- `find(query)`
     - `db.collentions.find()` 不帶參數的話會回傳所有 data
     - 可以對於某個 field 下更明確的查找指令，寫在該 field 的 object 中
-    - 如 `$gt: greater than`
-    - `db.flightData.find({distance: {$gt: 1000}})`
-- findOne({找出**第一個**符合條件的 document})
-- 可以加上 pretty() 讓結果顯示較易閱讀。 `db.collection.find().pretty()`
+    - 如 `$gt: greater than`：`db.flightData.find({distance: {$gt: 1000}})`
+- findOne(query)：找出**第一個**符合條件的 document
+- find 指令可以加上 pretty() 讓結果顯示較易閱讀。 `db.collection.find().pretty()`
 
 #### Projection
 - projection 可以讓我們只拿到需要的欄位
@@ -104,11 +105,11 @@ MongoDB
 - 如 `db.collection.find({}, {name:1, _id:0})`
     - 拿回所有 document，只保留 name 欄位
 #### Cursor Object
-- find 這個操作，其實並不會回傳所有符合的 data，
+- find 這個操作，其實並不會回傳所有符合的 data
     - 為了效率，find() 其實是回傳一個 **cursor object**
     - **而不是 list of document**
 - 透過這個 cursor object，我們可以輕易 cycle through the result
-    - 在 shell 中，預設會先回傳 20 筆資料
+    - 在 shell 中，預設會先回傳 20 筆資料與 cursor
         - 我們可以用 `it` 這個指令，來獲得下一批 result data （下 20 筆資料）
 - 如果我們使用 `db.collection.find().toArray()`，則 cursor 會 loop 所有資料並裝進一個 array 中，再回傳**所有的data**
     - 當 data 很多時效率會很差
@@ -116,7 +117,7 @@ MongoDB
     - 如 `db.datas.find().forEach( data => printjson(data))`
     - 效率比直接 `toArray` 還好，因為不會一次把所有 data load 進 memory 中，而是一筆一筆操作 （一批一批）
 
-- 其他操作（Create, update, delete）就沒有 cursor
+- 其他操作（Create, Update, Delete）就沒有 cursor
 
 
 ![](https://i.imgur.com/G7qvYBG.png)
@@ -130,33 +131,34 @@ MongoDB
 
 
 ### Update
-- updateOne({找出要被 update 的 document}, {描述要做的改變})
-- 在第二個參數中，可以給很多指令
+- `updateOne(query, document)`
+- 在第二個參數中描述要做的 update
     - 第二個參數是一個 object
         - key 為指令 (operators)
         - value 為另一個要賦予的 key-value pair
-    - operators 如 $set：修改已有的欄位值、如果沒有就加上這個欄位
+    - operators 如 $set：修改已有的欄位值、如果欄位不存在就加上這個欄位
 ```bash=
 db.collection.updateOne(
-    {name: 'suki'}, // 要update的條件
+    {name: 'myName'}, // 要update的條件
     {$set: {age: 18}}) // 要進行的 update 指令
 ```
 
-- updateMany({找出要被 update 的 document}, {描述要做的改變})
-    - 如果沒有指定條件 (為空 object)，就會全部 update 
+- `updateMany(query, document)`
+    - 如果沒有指定條件，就會全部 update 
     - 如 `db.collection.updateMany({}, {$set: {marker: 'toDelete'}})` 則所有 document 都會加上 marker 這個欄位
     - **要慎用！**
-    - updateOne 跟 updateMany，第二個參數都需要搭配 $set 之類的 operator 來使用
+    - updateOne 跟 updateMany，**第二個參數都需要搭配 $set 之類的 operator 來使用**
+        - mongoose 中才有省略 $set 的功能
     
-- update({找出要被 update 的 document}, {描述要做的改變})
+- `update(query, document)`
     - **應該要直接避免使用**
     - 第二個參數如果帶上 operator，效果就跟 updateMany ㄧ樣
-        - 如 `db.collection.update({_id:someId}, {$set: {isUpdate: true}})`
+        - 如 `db.collection.update({_id:someId}, {$set: {isUpdated: true}})`
         - 會將所有符合條件的 document 都 set `isUpdate` 的欄位與值
     - **第二個參數如果沒有帶上operator，則會直接 overwrite document**
         - 以第二個參數來 overwrite 所有符合條件的 object
         - 如 `db.collection.update({_id:someId}, {isUpdate: true})`
-        - **會將所有符合條件的 document 都 overwrite 成為只剩 _id 跟 isUpdate 的 document，原有的其他欄位都會消失！！！**
+        - **會將所有符合條件的 document 都 overwrite 成為只剩 _id 跟 isUpdate 的 document，原有的其他欄位都會消失**
         - _id 欄位一定會被保留
         - **如果想要達成 replace，則應該直接使用 `replaceOne 之類的 function`**
 > updateOne 跟 updateMany 都必須要帶上 operator（如 $set）來準確描述對資料的操作，否則會 error
@@ -165,8 +167,8 @@ db.collection.updateOne(
 > 如果帶上 operator 那效果就跟 updateMany ㄧ樣。
 > 如果沒有帶上 operator，則會直接 **overwrite 原先有的 document**，使用時應該要避免使用 update 以免誤用
 ### Delete
-- deleteOne({找出要被 delete 的 document})
-- deleteMany({找出要被 delete 的 document})
+- `deleteOne(query)`
+- `deleteMany(query)`
     - 如果沒有指定條件 (為空 object)，就會全部 delete 掉
     - `db.collection.deleteMany({})` **就會清空整個 collection**
     - **要慎用！**
@@ -178,7 +180,7 @@ db.collection.updateOne(
     - 且每個 document 最多 16 MB
     - **在 query 時，如果要指令 nested document 中的欄位，就需要用 "" 把 key 包起來**
 ```javascript=
-// 如下指令，因為使用 status.description 是 key，所以要用雙引號包住
+// 如下指令，因為 status.description 是 key，所以要用雙引號包住
 db.flightData.find({"status.description": "on-time"})
 db.filghtData.find({"status.details.someDetails": "detail"})
 
@@ -198,8 +200,7 @@ db.filghtData.find({"status.details.someDetails": "detail"})
 
 ```
 - Document 中可以有 List
-    - List of Data
-    - List of Document 都行
+    - List of Data or List of Document 都行
     - **在 query 時，如果使用 find，則只要 array 中有該資料就符合條件**
 ```javascript=
 // 如下指令，因為 hobbies 是一個 array，所以只要包含 sport 的都會符合
@@ -208,7 +209,7 @@ db.passengers.find({hobbies: 'sport'})
 // 則下列符合條件，所以會回傳
 {
     "_id": someId,
-    "name": "suki",
+    "name": "myName",
     "age": 18,
     "hobbies": [
         'sports',
@@ -218,13 +219,13 @@ db.passengers.find({hobbies: 'sport'})
 }
 ```
 
-### Resetting DB
+## Resetting DB
 - drop db
     - `use databaseName` -> `db.dropDatabase()`
 - drop collection
     - `db.myCollection.drop()`
 
-## 整理
+## Basic Wrap Up
 ![](https://i.imgur.com/3SEYWjh.jpg)
 
 # Schemas and Relations
@@ -237,12 +238,13 @@ db.passengers.find({hobbies: 'sport'})
 ![](https://i.imgur.com/FIAiLVu.jpg)
 
 ## Schema Validation
-- 我們可以設定 validation，使得在 insert 時會檢查
+- 我們可以設定 validation，在 insert 時會檢查
 ![](https://i.imgur.com/KtakIRN.png)
 
-- validation 也有很多不同的 level
-    - 可以只發出警告、或是會給出 error
-    - 或是是否允許在設定 schema 後，再去 update 那些曾經不符合 schema 的 document... 等等
+- validation action
+    - 只發出警告 or throw error
+- validation level
+    - 是否允許在設定 schema 後，再去 update 那些曾經不符合 schema 的 document... 等等
     - moderate validationLevel ：會檢查所有 insert，但允許「在加入 validation 前就已經存在的不合法資料」存在，並在他們 update 成 correct document 之後才去 validate 他們。
 
 
@@ -346,7 +348,7 @@ db.runCommand({ // 跑 admin 指令
 });
 
 ```
-### Data types
+## Data types
 ![](https://i.imgur.com/b8ca1rp.jpg)
 - 除了上述之外還有很多其他 advanced 的 datatype
 - 可以使用 `new Date()` 跟 `new Timestamp()` 來創造新的 ISODate 或 Timestamp data
@@ -406,7 +408,7 @@ db.collection('wealth').insert( {
 - 設計 schema 前可以考慮幾點
 ![](https://i.imgur.com/5qccSX9.jpg)
 
-## Relations
+### Relations
 - 對於各種 relations，我們都可以選擇要用 Embedd document 或是 Referenct 的方式來實現
     - 端看該狀況下哪個比較好
     - 資料有沒有大量重複？
@@ -458,11 +460,11 @@ db.collection('wealth').insert( {
 - 例如 book(many) -- author(many)
     - 我們希望當作者的資訊改變時，所有書上的作者資訊也都跟著改變 (反向也是)
 
-### 整理
+### Relations Wrap up
 ![](https://i.imgur.com/KzADAzx.jpg)
 
 
-### 使用 Lookup
+### Using Lookup
 - 我們可以使用 aggregate 來將有一次查詢到關聯的 data
 - 如 books -- authors，假設 book 中有個 field 叫 authors 為一個 array 紀錄關聯的 author id
     - 則可以使用 `db.books.aggregate([{$lookup: {from: "authors", "localField": "authors", foreignField: "_id", as: "creators"}}])` 在 book document 中一起呈現 author 的資訊
@@ -476,7 +478,7 @@ db.collection('wealth').insert( {
         - 在 books 中會加上 creators 這個欄位，顯示從 author 關聯來的資料 (原先的 authors field 仍會保持)
     - `從 books collection  中的 authors 欄位（localField）關聯到 authors collection(from) 中的 _id 欄位 (foreignField)，並且命名為 creators(as)`
 
-## 整理
+## Schema Wrap Up
 - 資料 model 與 structure 時，應該考慮
     - 應用的 App、或分析人員會怎麼獲取資料
         - 大多的應用場景是會分別的取用關聯式的資料、還是都會一起取出資料來使用呢
@@ -607,7 +609,7 @@ systemLog:
 #### dump and restore (Binary file)
 - mongodump is a utility for creating a binary export of the contents of a database. mongodump can export data from either mongod or mongos instances; i.e. can export data from standalone, replica set, and sharded cluster deployments.
 - The mongorestore program loads data from either a binary database dump created by mongodump or the standard input (starting in version 3.0.0) into a mongod or mongos instance.
-### 整理
+### Create Wrap up
 ![](https://i.imgur.com/6dJQ5Bm.jpg)
 
 ## Read
@@ -874,7 +876,7 @@ dataCursor.hasNext() // false
 
 
 - `$`: 找到 array 中第一個符合指定條件的 element
-    - The positional $ operator limits the contents of an <array> from the query results to **contain only the first element matching the query document**
+    - The positional $ operator limits the contents of an `<array>` from the query results to **contain only the first element matching the query document**
     - 如下
         - `"grades.$": 1` 代表要 project (include) `grades array` 中第一個符合條件的 element
 
@@ -1080,7 +1082,7 @@ db.students.update(
 - `$addToSet`: 跟 push 很像，一樣是把 element 加到 array 中。**但是如果 array 中已經有一樣的 element 就不會執行**
     - `db.users.updateOne(query, {$addToSet: {hobbies: {title: "Hiking", frequency: 2}}})` 如果 array 中已經存在這個 element 就不會加進去
 
-### 整理
+### Update Wrap Up
 ![](https://i.imgur.com/TaJbL6h.jpg)
 
 ## Delete
@@ -1090,75 +1092,79 @@ db.students.update(
 `db.collectionName.drop()` 會 drop 掉 collection
 `db.dropDatabase()` 會 drop 掉 db
 
-## Indexes
+# Indexes
 
 - `db.collectionName.getIndexes()` 可以列出 collection 中所有 index
     - _id 是 default index
 
 
-### COLLSCAN
+## COLLSCAN
 - 沒有 index 時，會對 collection 中的所有 document 做遍尋
 
-### IXSCAN
-- index 就是對我們建 index 的欄位額外維護一個 **order list**
+## IXSCAN
+- index 就是針對我們的 index key額外維護一個 **order list**
     - 這些欄位有 pointer 指向我們原本的 document
-- 如果 query 有用到 index，就會使用 IXSACAN，比 COLLSCAN 快很多
+- 如果 query 有用到 index，就會使用 IXSCAN，比 COLLSCAN 快很多
 - index 可以讓 find 變快，但 create, update, delete 都會變慢
     - 因為要花時間維護 document 跟 index
 
-### Explain
+## Explain
 - mongo 提供的工具，可以寫在 find, update, delete 的指令前面
     - insert 無法使用（因為沒有查詢的動作）
     - 如 `db.collection.explain().find(query)`
 - 加上 `executionStats` 可以拿到更詳細的執行數據
     - `db.collection.explain("executionStats").find(query)`
-- plan：mongodb 的查詢策略們
+- plan：mongodb 的查詢策略
     - winning-plan：最後使用的方法
     - rejected-plan：沒採用的方法
 
-#### Stages
+### Stages
 - IXSCAN 中的 nReturned 是指 **index key** 的 return 個數，而不是 document 本身
-- IXSCAN 之後會再搭配 FETCH stage，用 index key 找到 document 本身。這邊的 nReturned 才是 document 本身。
-- totalKeysExamined 代表整個查詢過程檢查了多少個 indexKey
-### createIndex
-- `<fieldName>: order`
+- IXSCAN 之後通常會再搭配 FETCH stage 
+    - 用符合 query 的 index pointer 找到 document 本身。
+    - 這邊的 nReturned 才是 document 本身。
+- totalKeysExamined 代表整個查詢過程針對 indexKey 檢查了多少個 value
+## CreateIndex
+- `db.collectionName.createIndex(<fieldName>: order)`
     - order 是 1 或 -1 
     - order 通常對查詢效果影響不大。就算我們查詢時方向相反，mongo 都還是能吃到 index
 
-### Restrictions
+## Restrictions
 - index 可以幫助我們快速找到 collection 中的「特定小集合」
     - 但有時 index 可能**會讓 query 變慢**，通常發生在我們下的 query 會拿回 **`很大集合的資料`** 時
-    - 例如當我們對 age 做 index，並下了 `find({age: {$gt: 20}})` 時
+    - 例如當我們對 age 做 index，並下了 `find({age: {$gt: 20}})` 
     - query 執行時，會先執行一次 IXSCAN，再執行 FETCH。由於資料中符合 age > 20 的 document 非常多(幾乎全部都符合)，所以執行這兩階段所花的時間，會比直接對 collection 做 COLLSCAN 所需的時間還更久
     - 相反的，如果執行 `find({age: {$gt: 60}})` 由於符合的 document 是小集合，因此可以得到用 index 加速的好處
 
 - 如果不確定 query 要使用什麼 index，最好先不要加並觀察數據，才能確保加了 index 有提升速度
 > 使用 index 會讓查詢變成兩階段 (IXSCAN + FETCH)。使用 index 加速的前提時這兩階段的所花時間 < 直接去做 COLLSCAN 的時間。當 query 所返回的 document 是 collections 中的大集合時，使用 index 可能會變慢
-> 
 
-### Compound Indexed
+
+## Compound Indexed
 - compound index 宣告的順序很重要
 - `{age: 1, gender: 1}` 的 compound index 會先依照 age 排序，同樣 age 的再依照 gender 排序
 - 而使用 query 時，只搜尋 age 或搜尋 age + gender 都可以使用 IXSCAN 的加速。
-    - 下查詢 query 時，順序是 `{age: 1, gender: 1}` 或 `{gender: 1, age: 1}` 都可以，不影響 mongo 是否用 index 
+    - 查詢 query 時，順序是 `{age: 1, gender: 1}` 或 `{gender: 1, age: 1}` 都可以，不影響 mongo 是否用 index 
 
-### Sorting
+## Sorting
 - index 可以加速 sorting
 - 能否吃到 index 跟上面 compound index 的邏輯一樣
 - index 宣告時的排序 asc/desc 跟 sorting 要的排序不同沒關係
 - 如果沒有用 index ，且對大量資料做 sorting 的話，有可能造成 timeout
     - 因為 mongo 要把所有 document load 到 memory 中，在 memory 中做排序
 
-### Unique Index
+## Unique Index
 - `db.collectionName.createIndex({fieldName: 1}, {unique: true})`
 - _id 就是一個 unique index
-- 如果某 document 不存在該欄位 or 該欄位值是 null，unique index 會確保不能有兩個 null 存在。如果只想對存在該 field 的 document 做 unique ，要搭配 partial index
+- 如果某 document 不存在該欄位的話建立 unique index 時會把該欄位當作 null
+    - unique index 會確保不能有兩個 null 存在。
+    - 如果只想對存在該 field 的 document 做 unique index ，要搭配 partial index
     - `db.user.createIndex({email: 1}, {unique: true, partialFilterExpression: {email: {$exists: true}}})`
     - 只對 email 存在的 document 做 unique index
     - 如果有多個 email 存在但值是 null 仍然會有這個問題
 
 
-### Partial Index
+## Partial Index
 - 只對符合條件的 document 做 index
 - 如果 query 有落在 index 條件裡，mongo 才會使用這個 index
     - 如 `db.collectionName.createIndex({age: 1}, {partialFilterExpression: {"gender": male}})` 只會對 gender 是 male 的 document 做 age 的 index
@@ -1168,26 +1174,26 @@ db.students.update(
     - 因為 partial index 建出來的 index 數量比較少。效率也會比較高
     - 如我們每次都只對 gender: male 做搜尋
 
-### TTL Index (Time-To-Live)
+## TTL (Time-To-Live) Index 
 - 對 self-destroying document 很有用
 - 只能加在 **date field** 上
 - 如 session
     - `db.sessions.insertOne({data: "someRandomData", createdAt: new Date()})`
     - `db.sessions.createIndex({createdAt: 1}, {expireAfterSeconds: 10})`
     - 有了 TTL index 後 ，mongo 會檢查是否有 document 已經超過 TTL 的 expireTime，有的話就會把這些 document 刪除
-    - 不確定 TTL index 被 delete 的機制，可能是 60 seconds interval 或 inset document 時會 trigger mondo 檢查並刪除超過 TTL 的 document
+    - 不確定 TTL index 被 delete 的機制，可能是 60 seconds interval 或 insert document 時會 trigger mondo 檢查並刪除超過 TTL 的 document
     - 只能在單一 date field 上運作，不支援 compound
 
-### Query Diagnosis
+## Query Diagnosis
 
-#### Explain
+### Explain
 - 透過 explain 我們可以看到 mongo 怎麼選 plan
 ![](https://i.imgur.com/kUwZsZL.png)
 
-#### Efficient Queries
+### Efficient Queries
 - 幾個指標
     - Millisecond Process Time：總共花多少時間
-    - key examined: 去 index 中查訊的 index key 數量
+    - key examined: 去 index key 中查訊的數量
     - documents exmained：在 collection 中查詢的 document 數量
     - document returned：最終返回的 document 數量
 - 好的 query 
@@ -1201,36 +1207,37 @@ db.students.update(
 - Coverd Query
     - 有 `# keys examined` 跟 `# Documents Returend`  且  `# Documents Examined` 是 0 
     - 因為 index 中有儲存 `index value 本身` 及 `指向 document 的 pointer`
-        - 如果我們要查找的資訊在 index 中就有儲存，則不需要回到 document 中查訊！可以直接透過 IXSCAN 查找而省略 FETCH 就直接返回 document
+        - 如果我們要查找的資訊在 index 中就有儲存，則不需要回到 document 中查訊
+        - **可以直接透過 IXSCAN 查找而省略 FETCH 就直接返回 document**
         - 如針對以下資料做 `{name: 1}` 的 index
-        - [{name: "Max", age: 29}, {name: "suki", age: 24}]
+        - `[{name: "Max", age: 29}, {name: "suki", age: 24}]`
         - 則 `db.users.find({name: "Max"}, {name: 1, _id: 0})` 就是 cover query，因為他只需要 return name 而不需要 return _id 或其他資訊，所以透過 index 本身就可以回傳 document，省去了 FETCH 的階段
         - 超級高效率
+
 ![](https://i.imgur.com/rAzdHQX.png)
 
-### Chossing plan
+## Chossing plan
 
-- mondo 怎麼選擇 plan 呢
 - 假設我們有 name 跟 age_name 的 index
 - 在搜尋 {name, age} 時，mongo 會先列出所有可用的 index
     - 有兩個 approach： name / age_name index
     - 針對該 query，mongo 會先用小量的 dataSet 讓每個 approach 都跑跑看，看誰勝出（如誰先最快找到 100 個 document），這個 approach 就是 winning plan
     - 之後再用這個 winning plan 跑整個 collection
 
-- cache winning plan
-    - 如果每個 qeury 都要先找出 winning plan 會很耗時
-    - 因此 mongo 會 cache winning plan，當有相同的 query 時就直接用這個 winning plan
+### Cache winning plan
+- 如果每個 qeury 都要先找出 winning plan 會很耗時
+- 因此 mongo 會 cache winning plan，當有相同的 query 時就直接用這個 winning plan
 
 
 ![](https://i.imgur.com/331AyN3.png)
 
-- expire winning plan
-    - 某些情境下 winning plan 的 cache 會過期
+### expire winning plan
+- 某些情境下 winning plan 的 cache 會過期
 
 ![](https://i.imgur.com/ErOgLrH.png)
 
 
-### MultiKey Index
+## MultiKey Index
 - 針對 array 中的 element 做 index
     - index 的數量會很大，假如一個 document 的 array 中有 4 個 element，有 1000 個 document，那 index 就會有 4000 個 value
 
@@ -1269,3 +1276,4 @@ db.students.update(
         - index key 是 hobbiesB.value
         - index value 是 `["Sports", "Cooking", "Hiking"]`
         - 查詢的時候 `find({'hobbiesB.value': "Sports"})` 可以吃到 index
+

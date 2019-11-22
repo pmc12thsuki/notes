@@ -531,6 +531,10 @@ systemLog:
     - 如 show dbs
     -  `db.help()` 、`db.collectionName.help()`查更多指令
 
+## Write JS Scripts For Mongo Shell
+- 我們可以寫好 js 腳本，然後用 mongo shell 執行
+- 用 `mongo script.js` 就行
+- [Write JS Scripts For Mongo Shell](https://docs.mongodb.com/manual/tutorial/write-scripts-for-the-mongo-shell/)
 # Advanced CRUD
 ## Create
 ![](https://i.imgur.com/ZXr4mGG.jpg)
@@ -1238,8 +1242,11 @@ db.students.update(
 
 
 ## MultiKey Index
+### Array
 - 針對 array 中的 element 做 index
     - index 的數量會很大，假如一個 document 的 array 中有 4 個 element，有 1000 個 document，那 index 就會有 4000 個 value
+
+- may lead to performance issue
 
 假設資料
 ```javascript=
@@ -1276,4 +1283,596 @@ db.students.update(
         - index key 是 hobbiesB.value
         - index value 是 `["Sports", "Cooking", "Hiking"]`
         - 查詢的時候 `find({'hobbiesB.value': "Sports"})` 可以吃到 index
+
+- 限制：
+    - 不能在 compound 中使用兩個以上的 multikey index
+    - 可以一個 multikey index 搭配其他單一 field index 組合成 compound index
+
+### Text Index
+- 是一種特殊的 multiKey Index
+- `db.collection.createIndex({someTextField: 'text'})`
+    - 如果寫 `someTextField: 1|-1` 只會創出一般的 index
+- 每個 collection 中**只能有一個 text index**
+    - 建立 text index 很 expensive (占空間)
+    - 比起使用 regex 在 text 中搜尋的效率要高很多
+- 如果有多個 field 都想做 text index，可以把多個 field 結合在一起變成新的 field，再對這個 field 做 text index
+    - 方法很簡單，在宣告 text index 時把所有 field 列出來就好
+    - `db.collection.createIndex({TextField1: 'text', TextField2: 'text'})`
+    - 如 `db.collection.createIndex({title: 'text', description: 'text'})`
+
+- 搜尋時 `db.collectionName.find({$text: {$search: "some string"}})`
+    - 因為一個 collection 只能有一個 text index，所以不用指定 field
+    - `db.collectionName.find({$text: {$search: "red book"}})`
+        - 搜尋的 string 是 "red", "book"，則有包含 'red' 或 'book' 的都會被搜尋到
+    - 如果想要搜尋整個 pharse "red book"，要把它包在**雙引號**中
+        - `db.collectionName.find({$text: {$search: '"red book"'}})`
+    - 預設 `caseSensitive: false` 搜尋時用大小寫都沒關係
+    - 或可以設定 `find({$text: {$search: "someText", caseSensitive: true}})`
+
+- mongo 會把 string 做基本處理之後變成 array of words
+    - 包含要做 index 的 string 跟搜尋時下的 string
+    - 先斷詞、移除 stop words、stemming word、轉成小寫
+    - 變成 array of meaning words
+    
+#### Exclude words
+- 除了正面列出想搜尋的字，還可以列出要排除的字
+- `db.collectionName.find({$text: {$search: "red -book"}})`
+    - 會找到包含 red 但不包含 book 的 documents
+#### Sorting Test Index
+- mongo 在 search text 的時候會給 score
+    - 放在 `{$meta: textScore}` 中
+- 我們希望 result 根據 score 來排序
+    - `db.products.find({$text: {$search: "some text"}}).sort({score: {$meta: "textScore"}})`
+
+#### Languages and Weight
+
+`db.collection.createIndex({title: 'text', description: 'text'}, { default_language: 'someLanguage', weights: { title:1, description: 10}})`
+
+- text index 的 defalut languages 是 english
+- language 會影響 word 的處理邏輯
+    - stemmed 是處理字根的邏輯
+    - 會有不同的 stop words
+- weights 可以設定 field 之間的比重來影響 score
+    - 如我們希望出現在 description 中的分數 : 出現在 title 的分數是 10: 1
+
+## Building Indexes
+### Foregroud vs Background
+![](https://i.imgur.com/0sd1baF.png)
+- 在 Production 環境要用 Backgroud !
+    - `db.collectionName.createIndex(index, {background: true})`
+
+## Index Wrap Up
+![](https://i.imgur.com/bw9neNW.jpg)
+
+
+# Aggregation
+## Aggregation Pipeline
+- 每一個 stage 的 input 都是上一個 stage 的 output
+    - `db.collectionName.aggregate([stage1, stage2, ....])`
+- 第一個 stage 的 input 是 collection 中的所有 documents
+    - mongo 不會真正把所有 documents 都 load 出來再進行 aggregate
+    - aggregate 也是回傳 cursor
+    - aggregate 也可以使用 index
+
+### $match
+- 就跟 query filter 一樣
+
+### $group
+
+```javascript=
+db.persons.aggregate([
+    {$group: {
+        _id: {myState: "$location.state", myAge: "$age"},
+        totalPerson: { $sum: 1}
+    }}
+])
+```
+- _id：接收一個 object，列出要 group 在一起的欄位
+    - _id: {自定義的 fieldName: 原本的 fieldName }
+    - 其中 "$location.state" 跟 "$age" 是指原本 document 中的 field
+    - 會把這兩個 field group 起來，回傳所有 group 的可能結果
+
+- 其他 field
+    - { 自定義的 fieldName: {產生 value 的 aggregation} }
+    - 可以在 $group stage 使用的 aggregation 有列在 document 中
+    - 如 `$sum: number` 會針對每一筆資料，在 group 的結果中加上 number
+    - [doc](https://docs.mongodb.com/manual/reference/operator/aggregation/group/index.html)
+
+- 回傳的 document 只會有 _id 跟我們新加的其他 field
+    - _id 會是 document 的格式
+    - 原本的其他 field 都會消失
+
+### $sort 
+- 可以被放在任何 stage
+```javascript=
+db.persons.aggregate([
+    { $match: { gender: 'female' } },
+    { $group: { _id: { state: "$location.state" }, totalPersons: { $sum: 1 } } },
+    { $sort: { totalPersons: -1 } } // 針對上一個 stage 的 output 來 sort
+]).pretty();
+
+```
+
+### $project
+- $project
+    - 跟 find 的 projection 很像，但可以有更強大的操作
+    - 是 aggregation 中**很重要、常用的功能**
+
+#### 拼出名字
+- $concat: [string]
+    - 會把 array 中的 string join 起來
+- $toUpper：string
+    - 會把 string 變成 uppercase
+- $substrCP： [string, startedIndex, length]
+    - substring
+- $subtract: [a, b] 
+    - 回傳 a-b
+- $strLenCP: string
+    - 回傳 string 的長度
+
+```javascript=
+db.persons.aggregate([
+    {
+      $project: {
+        _id: 0, // 不要 _id
+        gender: 1, // 要 gender
+        fullName: { // 產生一個新的 field 叫 fullName
+          $concat: [
+            { $toUpper: { $substrCP: ['$name.first', 0, 1] } },
+            {
+              $substrCP: [
+                '$name.first',
+                1,
+                { $subtract: [{ $strLenCP: '$name.first' }, 1] }
+              ]
+            },
+            ' ',
+            { $toUpper: { $substrCP: ['$name.last', 0, 1] } },
+            {
+              $substrCP: [
+                '$name.last',
+                1,
+                { $subtract: [{ $strLenCP: '$name.last' }, 1] }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]).pretty();
+
+```
+
+#### 轉換資料類別
+- $convert：
+    - 把 input 轉換成某個 type。
+    - 可以指定 onError 或 onNull 時要給的 default 值
+
+- $convert 的 shortCut
+    - mongo 文件中有提供例如 `$toDate`, `$toString` 之類的方法
+    - 其實就跟 $convert 是一樣的，但 $convert 可以提供 onError 跟 onNull
+    - 如下面 `birthdate: { $convert: { input: '$dob.date', to: 'date' } }`
+    - 等同於 `birthdate: { $toDate: '$dob.date' } `
+
+- $isoWeekYear: 從 date 中取出年份
+```javascript=
+db.persons.aggregate([
+    {
+      $project: {
+//       轉換成 date 格式
+        birthdate: { $convert: { input: '$dob.date', to: 'date' } },
+        age: "$dob.age",
+        location: {
+          type: 'Point',
+          coordinates: [ // 直接定義 coordinates 是一個 array of point
+            {
+//             轉換成 double 格式，error/null 的話給 0.0 當 default
+              $convert: {
+                input: '$location.coordinates.longitude',
+                to: 'double',
+                onError: 0.0,
+                onNull: 0.0
+              }
+            },
+            {
+              $convert: {
+                input: '$location.coordinates.latitude',
+                to: 'double',
+                onError: 0.0,
+                onNull: 0.0
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]).pretty();
+
+```
+
+### $out
+- 通常在 aggregation 的最後面
+- 可以把 aggregation 的結果寫入另一個 collection
+    - 已存在或新的 collection 都行
+
+- `{$out: 'collectionName'}`
+
+## Working with Array
+### $push
+- pushing elements into arrays
+- 如下
+    - 會把被 age 相同的 group 在一起
+    - 被 group 在一起的 document 的 hobbies 都被 push 進 `aNewArrayOfHobbies` 這個 array 中
+    - 假如原本 `hobbies` 就是一個 array，則 aNewArrayOfHobbies 就會是 **array of array**
+```javascript=
+db.collections.aggregate([
+    {
+        $group: {
+            _id: {age: "$age"}, 
+            aNewArrayOfHobbies: {$push: 'hobbies'}
+        }
+    }
+])
+```
+### addToSet
+- 跟 push 很像，但可以保證 array 中不會有重複的 value
+
+### $unwind
+- `{$unwind: "$arrayPath"}`
+- 把原本是 array 的 document 攤平
+    - group 是把多個 doucment  -> 一個 document
+    - unwind 會把一個 document -> 多個 document
+- 也就是會 flatten array
+- 拆成多個 document 之後其他欄位的值都保持不變， _id 也仍會一樣
+```javascript=
+//原本的 document
+[{
+    _id: ObjectId('111'),
+    name: 'mark',
+    hobbies: ['sports', 'cooking', 'climbing']
+}]
+
+// db.collection.aggregate([ {$unwind: "$hobbies"} ])
+[
+    {
+        _id: ObjectId('111'),
+        name: 'mark',
+        hobbies: 'sports'
+    },
+    {
+        _id: ObjectId('111'),
+        name: 'mark',
+        hobbies: 'cooking'
+    },
+    {
+        _id: ObjectId('111'),
+        name: 'mark',
+        hobbies: 'climbing'
+    }
+]
+```
+
+### $slice
+- 兩種形式
+    - `{ $slice: [ <array>, <n> ] }`
+        - n > 0，找頭 n 個 element
+        - n <0 ，找最後 n 個 element
+    - `{ $slice: [ <array>, <position>, <n> ] }`
+        - 從 position 開始找 n 個 element
+
+```javascript=
+db.collectionName.aggregate([
+    {
+        $project: { 
+            _id: 0, 
+            examScore: {$slice: ["$examScores", 2, 1]}
+        }
+    }
+])
+```
+
+### $size
+- 拿到 array 的長度
+```javascript=
+db.collectionName.aggregate([
+    {
+        $project: { 
+            _id: 0, 
+            numOfExam: {$size: "$examScores"}
+        }
+    }
+])
+```
+
+### $filter
+- 針對 array 中的 element 做 filter
+- 在 filter 中常常使用到 `"$$"` 來指令 array 中的每一個 element
+    - 下面範例中，如果用 $sc 會去 document 的那一層找名為 sc 的欄位
+    - 要用 $$ 才是指 array 中的每個 element
+- 邏輯跟 js 中的 filter 一樣
+
+```javascript=
+
+// data
+[{
+    _id: "someId",
+    examScores: [
+        {
+            difficulty: 3,
+            score: 70
+        },
+        {
+            difficulty: 4,
+            score: 65
+        }
+    ]
+}]
+
+// 
+db.collectionName.aggregate([
+    {
+        $project: {
+            _id: 0,
+            filteredScores: {
+                $filter: {
+                    input: "$examScores", // 要做 filter 的 array
+                    as: 'sc', // 幫 array 中的每個 element 命名
+                    cond: { $gt: ["$$sc.score", 60]}
+                    // 這邊要用 $$ 才能指到剛剛命名的 sc
+                    // $$sc 是 array 中的每個 element
+                    // 如果用 $sc 會去 document 的那一層找名為 sc 的欄位
+                }
+            }
+        }
+    }
+])
+```
+
+### $bucket 跟 $bucketAuto
+- 把資料分群（放在不同 bucket 的感覺）
+- $bucket
+    - groupBy：要用來分群的資料欄位
+    - boundaries：每個 bucket 的 range
+        - 18...30 是一個 bucket 
+        - 以此類推
+        - 60...120 是一個 bucket
+    - output: 每個 bucket 中有什麼欄位，可以做一些統計的數據
+
+
+- boundaries
+```
+An array of [ 0, 5, 10 ] creates two buckets:
+[0, 5) with inclusive lower bound 0 and exclusive upper bound 5.
+[5, 10) with inclusive lower bound 5 and exclusive upper bound 10.
+```
+```javascript=
+
+db.persons.aggregate([
+    {
+      $bucket: {
+        groupBy: '$dob.age',
+        boundaries: [18, 30, 40, 50, 60, 120],
+        output: {
+          numPersons: { $sum: 1 },
+          averageAge: { $avg: '$dob.age' }
+        }
+      }
+    }
+  ]).pretty();
+```
+
+- $bucketAuto
+    - 只需要指定 bucket 數量，讓 mongo 自己幫我們平均區分 bucket 的 boundary
+
+```javascript=
+db.persons.aggregate([
+    {
+      $bucketAuto: {
+        groupBy: '$dob.age',
+        buckets: 5,
+        output: {
+          numPersons: { $sum: 1 },
+          averageAge: { $avg: '$dob.age' }
+        }
+      }
+    }
+  ]).pretty();
+```
+
+## Order of Pipeline
+- 在 aggregation 中，pipeline 的順序是很重要的
+- 每一個 stage 的 input 都是上一個 stage 的 output
+- 在我們用 `db.find().sort().limit().skip()` 時
+    - sort, limit, skip 的順序不重要
+    - mongo 會幫我們先 sort -> skip -> limit
+    - 在用 aggregate 時就需要注意這三個的順序
+
+```javascript=
+db.persons.aggregate([
+    { $match: { gender: "male" } },
+    { $project: { _id: 0, gender: 1, name: { $concat: ["$name.first", " ", "$name.last"] }, birthdate: { $toDate: "$dob.date" } } },
+    { $sort: { birthdate: 1 } },
+    { $skip: 10 },
+    { $limit: 10 }
+  ]).pretty();
+```
+
+## Optimize Aggregation Pipeline
+- mongo 會在不影響邏輯的情況下，幫我們 optimize pipeline
+- [doc](https://docs.mongodb.com/manual/core/aggregation-pipeline-optimization/)
+
+## Aggregate Wrap Up
+![](https://i.imgur.com/hO8k9Sv.png)
+
+# Performance, Fault Tolerance & Deployment
+## What Influences Performance
+![](https://i.imgur.com/M8tmyMV.png)
+
+## Capped Collection
+- 要顯示創建的 collection
+- 定義這個 collection 的容量/document 數量
+    - 當超過上限時 ，**old document** 會自動被刪除
+    - 適合存 log、cache
+
+`db.createCollection('collectionName', {capped: true, size: 10000, max: 5})`
+
+- size: collection 的容量上限
+    - If the size field is less than or equal to 4096, then the collection will have a cap of 4096 bytes
+- max: collection 的 document 數量上限
+    - optional
+
+## Replica Sets
+- client 端送指令給 mongoDB server 時，server 會直接跟 primary Node(a server, a instance) 溝通
+- 寫入操作時
+    - mongo server 直接對 primary node 做操作
+    - 之後 primary node 會非同步的更新到 secondary Node
+
+
+![](https://i.imgur.com/HNXiNcn.png)
+
+
+- 好處是當 primary node 不小心掛點時，會有某個 secondary node 成為 primary node
+    - 服務可以持續，replica set 可以自動 restore
+    - 寫入操作依然針對（新的）primary node
+
+![](https://i.imgur.com/TL98p42.png)
+
+
+- 透過良好的設定
+    - read 操作也可以直接針對 secondary node 讀取
+    - 分散流量
+    - write 操作 always 只對 primary node 操作
+
+![](https://i.imgur.com/R7pvIDZ.png)
+
+## Sharding (Horizontal Scaling)
+- 這些水平擴容的 server **並不會 backup data**
+    - 而是分散資料
+    - 跟 replica set 不同，replica set 的不同 node 存著相同的 data
+- 這些 server 需要**一起** 存在才能支援整個 app
+- 當進行 query 時（不論讀寫）
+    - query 需要知道要去 **哪個 server**
+    - 或是 query 需要進到 **每個 server**
+    - 看 data 怎麼切的
+
+
+![](https://i.imgur.com/Ou82KlU.png)
+
+- 每一個 shard 可以（且通常）是一組 replica sets
+### shard key
+- 透過 mongodb 的 mongos (Router) 透過 shard key 把 query 指向正確的 shard
+    - 我們需要定義 shard key 來 split data
+    - document 上會加上 shard key，判斷 document 屬於哪個 shard
+    - shard key 的定義需要技巧，因為資料分布的 **越平均** 越好
+
+![](https://i.imgur.com/FvTUPDa.png)
+
+- mongos 有兩種執行 query 的可能
+    - 如果 query 中沒有 shardKey
+        - mongos 不知道要找哪個 shard
+        - 只能 BroadCast 到每個 shard，再 merge 所有 return 結果
+    - query 中有 shardKey
+        - mogos 直接找到負責的 shard
+        - 效率高
+
+![](https://i.imgur.com/dhOCHmu.png)
+
+- 開發人員需要
+    - 協助定義 shard key，看 app 中哪個 shard key 有平均分散
+    - 在 query 中盡量使用到 shard key 提高效能（跟index的感覺有點像）
+
+## Deployment
+![](https://i.imgur.com/zbosKVT.png)
+
+## Module Wrap Up
+![](https://i.imgur.com/5MPpgOy.png)
+
+# Transaction
+- 4.0 以上的功能
+- mongodb atlas 的免費版 M0 目前可以支援
+    - Atlas locks the MongoDB version and storage engine for M0/M2/M5 clusters to MongoDB 4.0 with WiredTiger.
+- **需要在 replica set 環境下才能使用**
+
+- 原本的 mongo 只有 documetn level 的 atomic
+    - 只能保證一個 documet 的寫入是完全成功/失敗
+    - 就連 **insertMany, deleteMany** 這類的操作，都可能成功失敗交雜
+
+- 我們可以用 transaction 保證 multiple document level 的 atomic
+    - 可以跨 collection
+    - 甚至可以只用在 **insertMany, deleteMany** 這類的操作
+## How to use
+- 要定義 session 
+    - 如此 mongo server 才能 identify 這些 request 是同一組的
+- 在 transaction commit 之前，所有的操作都不會真的生效
+    - 像是被擺在一個 todos 中
+- 在 mongo shell 中
+```javascript=
+const session = db.getMongo().startSession(); // 開始一個 session
+// 把指向 collection 的指標存起來
+const postsColl = session.getDatabase('blog').posts; 
+const usersColl = session.getDatabase('blog').users;
+
+// 開始一個 transtion 及操作
+session.startTransaction()
+usersColl.deleteOne({_id: 'someUserId'});
+postsColl.deleteMany({userId: 'someUserId'})
+
+// commit or abort 一個 transaction
+session.commitTransaction()
+// session.abortTransaction()
+
+// 此時資料已經被一起刪除
+// 如果操作失敗，則資料都不會被刪除
+
+```
+
+### Node
+```javascript=
+// For a replica set, include the replica set name and a seedlist of the members in the URI string; e.g.
+  // const uri = 'mongodb://mongodb0.example.com:27017,mongodb1.example.com:27017/?replicaSet=myRepl'
+  // For a sharded cluster, connect to the mongos instances; e.g.
+  // const uri = 'mongodb://mongos0.example.com:27017,mongos1.example.com:27017/'
+
+  const client = new MongoClient(uri);
+  await client.connect();
+
+  // Prereq: Create collections. CRUD operations in transactions must be on existing collections.
+
+  await client
+    .db('mydb1')
+    .collection('foo')
+    .insertOne({ abc: 0 }, { w: 'majority' });
+
+  await client
+    .db('mydb2')
+    .collection('bar')
+    .insertOne({ xyz: 0 }, { w: 'majority' });
+
+  // Step 1: Start a Client Session
+  const session = client.startSession();
+
+  // Step 2: Optional. Define options to use for the transaction
+  const transactionOptions = {
+    readPreference: 'primary',
+    readConcern: { level: 'local' },
+    writeConcern: { w: 'majority' }
+  };
+
+  // Step 3: Use withTransaction to start a transaction, execute the callback, and commit (or abort on error)
+  // Note: The callback for withTransaction MUST be async and/or return a Promise.
+  try {
+    await session.withTransaction(async () => {
+      const coll1 = client.db('mydb1').collection('foo');
+      const coll2 = client.db('mydb2').collection('bar');
+
+      // Important:: You must pass the session to the operations
+
+      await coll1.insertOne({ abc: 1 }, { session });
+      await coll2.insertOne({ xyz: 999 }, { session });
+    }, transactionOptions);
+  } finally {
+    await session.endSession();
+    await client.close();
+  }
+```
 
